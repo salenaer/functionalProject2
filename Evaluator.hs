@@ -116,8 +116,8 @@ handleSubscribe _ (Right output) = do
 
 prefer::ServerData->Login->String->Slot->Either Error ServerData
 prefer (ServerData userPool examPool) login examName slot = do
-    user<-checkSpecificUser userPool login Student
-    updatedExamPool<-Pool.prefer examPool user examName slot
+    Pool.User userName _ _<-checkSpecificUser userPool login Student
+    updatedExamPool<-Pool.prefer examPool userName examName slot
     return $ ServerData userPool updatedExamPool
 
 handlePrefer::ServerData->Either Error ServerData -> IO(ServerData)
@@ -127,6 +127,8 @@ handlePrefer input (Left error) = do
 handlePrefer _ (Right output) = do
     System.IO.putStrLn "ok"
     return output
+
+
 
 ---------------------------supporting functions
 admin::Login->Either Error ()
