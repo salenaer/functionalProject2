@@ -1,7 +1,14 @@
+module RequestParser(Login(Login), Request(..)) where
+import DoodleParser(slot, doodle)
+import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle))
+
+--module RequestParser(Time(Time), Slot(Slot), Doodle, Login(Login), Request(..)) where
+--import DoodleParser(Doodle, Slot(Slot), Time(Time))
+
 import Parser
 import Data.Time
 import Data.Char
-import DoodleParser
+
 
 data Login = Login String String deriving (Show)
 

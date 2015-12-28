@@ -1,4 +1,6 @@
-module DoodleParser(slot, doodle, Slot, Doodle) where
+module DoodleParser(slot, doodle) where
+
+import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle))
 
 import Parser
 import Data.Time
@@ -8,10 +10,6 @@ data Zone = PositiveZone Int Int
           | NegativeZone Int Int
           | NoZone
            deriving(Show)
-data Time = Time Int Int Int Int Int deriving (Show)
-
-data Slot = Slot Time Time deriving(Show)
-data Doodle = Doodle [Slot] deriving(Show)
 
 zone :: Parser.Parser Zone
 zone = positiveZone `Parser.orelse` negativeZone
