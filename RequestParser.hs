@@ -1,11 +1,10 @@
-module RequestParser(Login(Login), Request(..)) where
+module RequestParser(Login(Login), Request(..), requestParser) where
 import DoodleParser(slot, doodle)
 import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle))
 
 import Parser
 import Data.Time
 import Data.Char
-
 
 data Login = Login String String deriving (Show)
 
@@ -67,7 +66,7 @@ subscribe = do
 
 prefer :: Parser.Parser Request
 prefer = do
-    user <- keywordAndLogin"subscribe"
+    user <- keywordAndLogin"prefer"
     name <- Parser.token
     slot <- slot
     return $ Prefer user name slot
@@ -92,6 +91,10 @@ login = do
 {-
     Parser.apply requestParser "add-teacher admin@1234 walter"
     Parser.apply requestParser "set-doodle walter@jk62k math [2016-01-04T14:00+01:00 / 2016-01-04T16:00+01:00, 2016-01-04T13:00+01:00 / 2016-01-04T15:00+01:00]"
+    Parser.apply requestParser "prefer tim@student Cooking 2016-01-04T14:00+01:00 / 2016-01-04T16:00+01:00"
+
+
+
 -}
 --2015-11-30T10:28+01:00/2015-11-31T10:28+01:00
 

@@ -1,7 +1,7 @@
 module Pool (UserPool, ExamPool, FollowerPool, Pool(Pool), Exam(Exam), User(User), addUser, changePassword, login, 
-    emptyUserPool, addExam, getExamDoodle, subscribe, prefer, emptyExamPool) where
+    emptyUserPool, addExam, getExamDoodle, subscribe, prefer, examSchedule, emptyExamPool) where
 
-import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle), UserRank, sortDoodle)
+import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle), UserRank, Schedule(Schedule), sortDoodle)
 import Error
 
 import qualified Data.Map
@@ -103,14 +103,6 @@ slotsForExam (Exam _ (Doodle slots) (Pool followers)) examName =
                         (cycle [0]))
                followers)
 
-data Schedule = Schedule [(String, Slot)] Int deriving(Show)
-
-instance (Eq Schedule) where
-    (==) (Schedule _ cost1) (Schedule _ cost2) = cost1 == cost2 
-
-instance (Ord Schedule) where
-    (<=) (Schedule _ cost1) (Schedule _ cost2) = cost1 <= cost2 
-
 overlapping::Slot->Slot->Bool
 overlapping (Slot beginA endA)(Slot beginB endB)=
     (beginA <= beginB) && (endA > beginB) ||
@@ -136,33 +128,8 @@ schedulesForPool (Pool exams) =
         collect schedules (name, exam)=
             combine schedules $ slotsForExam exam name
 
-bestScheduleForPool::ExamPool->Either Error Schedule
-bestScheduleForPool pool = 
+examSchedule::ExamPool->Either Error Schedule
+examSchedule pool = 
     case schedulesForPool pool
         of []->Left NoPossibleExamSchedule
            x->return $ maximum x
-----------------------fails if slot is not in list
-
-slot1 = Slot (Time 2016 1 4 12 0)(Time 2016 1 4 14 0)
-slot2 = Slot (Time 2016 1 4 14 0)(Time 2016 1 4 16 0)
-slot3 = Slot (Time 2016 1 4 16 0)(Time 2016 1 4 18 0)
-
-exam1 = Exam "Mark" (Doodle [slot1, slot2, slot3])
-                    (Pool (Data.Map.fromList [("Tim",slot1)
-                                             ,("Johny", slot3)
-                                             ,("Gabrial", slot1)
-                                             ,("Anny", slot1)
-                                             ,("Hoday", slot3)]))
-exam2 = Exam "Mark" (Doodle [slot1, slot2, slot3])
-                    (Pool (Data.Map.fromList [("Tim",slot1)
-                                             ,("Johny", slot2)
-                                             ,("Gabrial", NoPreference)
-                                             ,("Anny", slot1)
-                                              ,("Hoday", NoPreference)]))
-exam3 = Exam "Mark" (Doodle [slot1, slot2, slot3])
-                    (Pool (Data.Map.fromList [("Tim",slot1)
-                                             ,("Anny", slot1)
-                                             ,("Hoday", NoPreference)]))
-testExamPool = Pool (Data.Map.fromList [("Math", exam1)
-                                       ,("English", exam2)
-                                       ,("Dutch", exam3)])

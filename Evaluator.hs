@@ -1,28 +1,27 @@
+module Evaluator (eval, evalWithPassword, ServerData(ServerData)) where
+
 --data constructors need to be explicitly shared and imported
 import RequestParser (Login(Login), Request(..))
-import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle), UserRank(..))
+import BasicTypes(Slot, Doodle, UserRank(..), Schedule)
 
 import qualified Pool 
 import Error
-
-import System.Random  
+ 
 import System.IO
 
-adminPassword :: String
-adminPassword = "123"
-
 --student pool, teacher pool, exam pool
-data ServerData = ServerData Pool.UserPool Pool.ExamPool deriving (Show)
+data ServerData = ServerData Pool.UserPool Pool.ExamPool String
 
-eval::ServerData ->Request->IO(ServerData)
-eval input (AddTeacher login name) = do
-    password <- makePassword --makes password even when login fails (optimize if possible)
+--boolean indicates if the data has been changed, it is has an writeTvar needs to be done
+--only writeTvarChecks if some other write has done in past all reads can happen concurrently
+evalWithPassword::ServerData->Request->String->(Bool, String, ServerData)
+evalWithPassword input (AddTeacher login name) password= do
     handleAddUser password input $ addUser input login name password Teacher 
     
-eval input (AddStudent login name) = do
-    password <- makePassword --makes password even when login fails (optimize if possible)
+evalWithPassword input (AddStudent login name) password= do
     handleAddUser password input $ addUser input login name password Student 
 
+eval::ServerData->Request->(Bool, String, ServerData)
 eval input (ChangePassword login newpass)=
     handleChangePassword input $ changePassword input login newpass
 
@@ -38,101 +37,86 @@ eval input (Subscribe login examName)=
 eval input (Prefer login examName slot)=
     handlePrefer input $ prefer input login examName slot
 
+eval input (ExamSchedule login)=
+    handleExamSchedule input $ examSchedule input login
+
 --------------------adding users
 -- add some user to the pool of users
 addUser::ServerData->Login->String->String->UserRank->Either Error ServerData
-addUser (ServerData userPool examPool) login userName password rank= do
-    admin login
+addUser (ServerData userPool examPool adminPassword) login userName password rank= do
+    admin login adminPassword
     updatedUserPool <- Pool.addUser userPool userName password rank
-    return $ ServerData updatedUserPool examPool
+    return $ ServerData updatedUserPool examPool adminPassword
 
-handleAddUser :: String->ServerData->Either Error ServerData->IO(ServerData)
-handleAddUser _ input (Left error) = do
-    System.IO.putStrLn $ show error
-    return input
-handleAddUser password _ (Right output) = do
-    System.IO.putStr "ok "
-    System.IO.putStrLn password
-    return output
+handleAddUser :: String->ServerData->Either Error ServerData->(Bool, String, ServerData)
+handleAddUser _ input (Left error) = (False, show error, input)
+handleAddUser password _ (Right output) = (True, "ok "++ password, output)
 
 -----------------------------changing password
 changePassword::ServerData->Login->String->Either Error ServerData
-changePassword (ServerData userPool examPool) login newPassword = do
+changePassword (ServerData userPool examPool adminPassword) login newPassword = do
     Pool.User name password teacher<-checkUser userPool login
-    return $ ServerData (Pool.changePassword userPool name newPassword teacher) examPool
+    return $ ServerData (Pool.changePassword userPool name newPassword teacher) examPool adminPassword
 
-handleChangePassword :: ServerData->Either Error ServerData->IO(ServerData)
-handleChangePassword input (Left error) = do
-    System.IO.putStrLn $ show error
-    return input
-handleChangePassword _ (Right output) = do
-    System.IO.putStrLn "ok"
-    return output
+handleChangePassword :: ServerData->Either Error ServerData->(Bool, String, ServerData)
+handleChangePassword input (Left error) = (False, show error, input)
+handleChangePassword _ (Right output) = (True, "ok", output)
 
 -----------------------------setting and getting doodles
 
 setDoodle::ServerData->Login->String->Doodle->Either Error ServerData
-setDoodle (ServerData userPool examPool) login examName doodle = do
+setDoodle (ServerData userPool examPool adminPassword) login examName doodle = do
     Pool.User teacherName _ teacher<-checkSpecificUser userPool login Teacher
     updatedExamPool <- Pool.addExam examPool examName teacherName doodle
-    return $ ServerData userPool updatedExamPool
+    return $ ServerData userPool updatedExamPool adminPassword
 
-handleSetDoodle::ServerData->Either Error ServerData->IO(ServerData)
-handleSetDoodle input (Left error) = do
-    System.IO.putStrLn $ show error
-    return input
-handleSetDoodle _ (Right output) = do
-    System.IO.putStrLn "ok"
-    return output
+handleSetDoodle::ServerData->Either Error ServerData->(Bool, String, ServerData)
+handleSetDoodle input (Left error) = (False, show error, input)
+handleSetDoodle _ (Right output) = (True, "ok", output)
+
 
 getDoodle::ServerData->Login->String->Either Error Doodle
-getDoodle (ServerData userPool examPool) login examName =
+getDoodle (ServerData userPool examPool _) login examName =
     checkUser userPool login
     >> Pool.getExamDoodle examPool examName
 
-handleGetDoodle::ServerData->Either Error Doodle -> IO(ServerData)
-handleGetDoodle input (Left error) = do
-    System.IO.putStrLn $ show error
-    return input
-handleGetDoodle input (Right doodle) = do
-    System.IO.putStr "ok"
-    System.IO.putStrLn $ show doodle
-    return input
+handleGetDoodle::ServerData->Either Error Doodle -> (Bool, String, ServerData)
+handleGetDoodle input (Left error) = (False, show error, input)
+handleGetDoodle input (Right doodle) = (False, "ok "++ show doodle, input)
 
---------------------------- subscribe and prefere
+--------------------------- subscribe ,prefere and examSchedule
 subscribe::ServerData->Login->String->Either Error ServerData
-subscribe (ServerData userPool examPool) login examName = do
+subscribe (ServerData userPool examPool adminPassword) login examName = do
     user<-checkSpecificUser userPool login Student
     updatedExamPool<-Pool.subscribe examPool user examName
-    return $ ServerData userPool updatedExamPool
+    return $ ServerData userPool updatedExamPool adminPassword
 
-handleSubscribe::ServerData->Either Error ServerData -> IO(ServerData)
-handleSubscribe input (Left error) = do
-    System.IO.putStrLn $ show error
-    return input
-handleSubscribe _ (Right output) = do
-    System.IO.putStrLn "ok"
-    return output
+handleSubscribe::ServerData->Either Error ServerData -> (Bool, String, ServerData)
+handleSubscribe input (Left error) = (False, show error, input)
+handleSubscribe _ (Right output) = (True, "ok", output)
+
 
 prefer::ServerData->Login->String->Slot->Either Error ServerData
-prefer (ServerData userPool examPool) login examName slot = do
+prefer (ServerData userPool examPool adminPassword) login examName slot = do
     Pool.User userName _ _<-checkSpecificUser userPool login Student
     updatedExamPool<-Pool.prefer examPool userName examName slot
-    return $ ServerData userPool updatedExamPool
+    return $ ServerData userPool updatedExamPool adminPassword
 
-handlePrefer::ServerData->Either Error ServerData -> IO(ServerData)
-handlePrefer input (Left error) = do
-    System.IO.putStrLn $ show error
-    return input
-handlePrefer _ (Right output) = do
-    System.IO.putStrLn "ok"
-    return output
+handlePrefer::ServerData->Either Error ServerData -> (Bool, String, ServerData)
+handlePrefer input (Left error) = (False, show error, input)
+handlePrefer _ (Right output) = (True, "ok", output)
 
+examSchedule::ServerData->Login->Either Error Schedule
+examSchedule (ServerData userPool examPool adminPassword) login =
+    checkUser userPool login
+    >> Pool.examSchedule examPool
 
-
+handleExamSchedule::ServerData->Either Error Schedule -> (Bool, String, ServerData)
+handleExamSchedule input (Left error) = (False, show error, input)
+handleExamSchedule input (Right schedule) = (True, "ok "++ show schedule, input)
 ---------------------------supporting functions
-admin::Login->Either Error ()
-admin (Login name password) =
+admin::Login->String->Either Error ()
+admin (Login name password) adminPassword =
     if name =="admin"&&password==adminPassword
         then Right ()
         else Left WrongLogin
@@ -148,28 +132,4 @@ checkSpecificUser pool login rank = do
     if (foundRank == rank)
         then return user
         else Left WrongLogin
-
-
-makePassword = do      
-    gen <- newStdGen      
-    return $ take 5 (randomRs ('a','z') gen) 
-
---test code--
-{-
-login (Pool.addUser Pool.emptyUserPool "Tim" "pswr")(Login "Tim" "pswr")
-eval (ServerData Pool.emptyUserPool emptyExamPool) (AddTeacher (Login "admin" "123") "walter")
-eval (ServerData advancedUserPool Pool.emptyExamPool) (AddStudent (Login "admin" "123") "Tim")
-eval (ServerData advancedUserPool Pool.emptyExamPool) (ChangePassword (Login "Tim" "luck") "timmy123")
-eval (ServerData advancedUserPool emptyExamPool) (SetDoodle (Login "Tim" "luck") "Math" (Doodle [Slot (Time 2016 1 4 15 0)(Time 2016 1 4 17 0), Slot (Time 2016 1 4 14 0)(Time 2016 1 4 16 0)]))
-eval (ServerData advancedUserPool advancedExamPool) (SetDoodle (Login "John" "pswr") "Math" (Doodle [Slot (Time 2016 1 4 15 0)(Time 2016 1 4 17 0), Slot (Time 2016 1 4 14 0)(Time 2016 1 4 16 0)]))
-eval (ServerData advancedUserPool advancedExamPool) (GetDoodle (Login "John" "pswr") "Math")
-eval (ServerData advancedUserPool advancedExamPool) (Subscribe (Login "Anny" "pswr") "German")
-eval (ServerData advancedUserPool expertExamPool) (Prefer (Login "Anny" "pswr") "German" (Slot (Time 2016 1 4 15 0)(Time 2016 1 4 17 0)))
--}
-
-advancedUserPool = getPool (Pool.addUser (getPool (Pool.addUser (getPool (Pool.addUser Pool.emptyUserPool "Tim" "luck" Teacher)) "John" "pswr" Teacher)) "Anny" "pswr" Student)
-advancedExamPool = getPool (Pool.addExam (getPool (Pool.addExam Pool.emptyExamPool "Math" "Tim" (Doodle []))) "German" "Tim" (Doodle [Slot (Time 2016 1 4 15 0)(Time 2016 1 4 17 0), Slot (Time 2016 1 4 14 0)(Time 2016 1 4 16 0)]))
-expertExamPool = getPool(Pool.subscribe advancedExamPool (Pool.User "Anny" "pswr" Student) "German")
-getPool::Either Error (Pool.Pool x y) -> Pool.Pool x y
-getPool (Right pool) = pool
 
