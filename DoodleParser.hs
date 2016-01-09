@@ -1,3 +1,6 @@
+{- parses doodle slot and time strings
+-}
+
 module DoodleParser(slot, doodle) where
 
 import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle))

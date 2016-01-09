@@ -1,3 +1,6 @@
+{- file that handles the evaluating of a correct parsed expression. 
+-}
+
 module Evaluator (eval, evalWithPassword, ServerData(ServerData)) where
 
 --data constructors need to be explicitly shared and imported
@@ -13,7 +16,8 @@ import System.IO
 data ServerData = ServerData Pool.UserPool Pool.ExamPool String
 
 --boolean indicates if the data has been changed, it is has an writeTvar needs to be done
---only writeTvarChecks if some other write has done in past all reads can happen concurrently
+--this eval takes an extra random password.
+--if eval fails (user already exists / admin password wrong) the created password is not used. 
 evalWithPassword::ServerData->Request->String->(Bool, String, ServerData)
 evalWithPassword input (AddTeacher login name) password= do
     handleAddUser password input $ addUser input login name password Teacher 
@@ -115,17 +119,19 @@ handleExamSchedule::ServerData->Either Error Schedule -> (Bool, String, ServerDa
 handleExamSchedule input (Left error) = (False, show error, input)
 handleExamSchedule input (Right schedule) = (True, "ok "++ show schedule, input)
 ---------------------------supporting functions
+--check if admin password is correct
 admin::Login->String->Either Error ()
 admin (Login name password) adminPassword =
     if name =="admin"&&password==adminPassword
         then Right ()
         else Left WrongLogin
 
---if login succeeds return User
---if login fails returns nothing
+--check if given password is same as stored password
+--can return userNotFoud / wrongLogin / User
 checkUser::Pool.UserPool -> Login -> Either Error Pool.User
 checkUser pool (Login name password) = Pool.login pool name password
 
+--check if given password is same as stored passward and if user has required rights
 checkSpecificUser::Pool.UserPool -> Login -> UserRank-> Either Error Pool.User
 checkSpecificUser pool login rank = do
     user@(Pool.User name password foundRank) <- checkUser pool login

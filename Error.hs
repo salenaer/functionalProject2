@@ -1,3 +1,6 @@
+{- file for personnal errors, there are throw using the left of eithers. 
+-}
+
 module Error (Error(..)) where
 
 data Error = IdTaken

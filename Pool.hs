@@ -1,3 +1,8 @@
+{- 
+data structure to store user and exams.
+also responsible to calculate the best exam schedule as this is dependant on the repressentation of doodle. 
+-}
+
 module Pool (UserPool, ExamPool, FollowerPool, Pool(Pool), Exam(Exam), User(User), addUser, changePassword, login, 
     emptyUserPool, addExam, getExamDoodle, subscribe, prefer, examSchedule, emptyExamPool) where
 
@@ -95,6 +100,10 @@ increase ((slot, x):rest) target
     |slot == target = (slot, x+1):rest
     |otherwise = (slot, x):(increase rest target)
 
+--add to every slot: 
+--      the name of the exam
+--      the slot
+--      the number of votes
 slotsForExam::Exam->String->[(String, Slot, Int)]
 slotsForExam (Exam _ (Doodle slots) (Pool followers)) examName = 
     map (\(x,y)->(examName, x, y))
@@ -103,15 +112,20 @@ slotsForExam (Exam _ (Doodle slots) (Pool followers)) examName =
                         (cycle [0]))
                followers)
 
+--check if two slots are overlapping
 overlapping::Slot->Slot->Bool
 overlapping (Slot beginA endA)(Slot beginB endB)=
     (beginA <= beginB) && (endA > beginB) ||
     ((beginB <= beginA) && (endB > beginA))
 
+--check if some slot overlaps with any slot in the list
 someOverlap::Slot->[(String, Slot)]->Bool
 someOverlap slot list = 
     foldl (||) False $ map (\(_, x) -> overlapping slot x) list
 
+--given a list of partial schedules (some exams planned others not) and possible slots for some exam
+--returns list of possible schedules where no slots overlap
+--adds votes together
 combine::[Schedule]->[(String, Slot, Int)]->[Schedule]
 combine [] slots = do
     (examName, slot, slotVotes)<-slots
@@ -122,12 +136,14 @@ combine schedules slots = do
     guard $ not (someOverlap slot planned)
     return $ Schedule ((examName,slot):planned) (slotVotes+scheduleVotes)
 
+--get all possible non-overlapping schedules from a pool of exams.
 schedulesForPool::ExamPool->[Schedule]
 schedulesForPool (Pool exams) = 
     foldl collect [] $ Data.Map.assocs exams where
         collect schedules (name, exam)=
             combine schedules $ slotsForExam exam name
 
+--get the best schedule from the possible non-overlapping schedules. 
 examSchedule::ExamPool->Either Error Schedule
 examSchedule pool = 
     case schedulesForPool pool

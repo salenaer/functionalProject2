@@ -1,3 +1,5 @@
+{- parses all commands. Returns something of type request -}
+
 module RequestParser(Login(Login), Request(..), requestParser) where
 import DoodleParser(slot, doodle)
 import BasicTypes(Time(Time), Slot(Slot, NoPreference), Doodle(Doodle))

@@ -1,3 +1,9 @@
+{-
+unchanged parser file, not my work!!!. 
+source: vub course functional programming. 
+author: Laurent Christophe
+-}
+
 module Parser (Parser, apply, sat, char, string, some, many, orelse, oneof, blank, keyword, token, integer, float) where
 
 import Control.Monad
